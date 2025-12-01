@@ -6,6 +6,9 @@ from typing import Optional
 from typing import cast
 
 import cloudflare
+from cloudflare.types.zones import Zone
+from cloudflare.types.dns import record_list_params, txt_record_param
+from cloudflare.pagination import SyncV4PagePaginationArray
 
 from certbot import errors
 from certbot.plugins import dns_common
@@ -105,14 +108,14 @@ class _CloudflareClient:
             # library.
             self.cf = cloudflare.Cloudflare(api_token=api_token)
 
-    def add_txt_record(self, domain: str, record_name: str, record_content: str,
+    def add_txt_record(self, domain: str, record_name: record_list_params.Name, record_content: record_list_params.Content,
                        record_ttl: int) -> None:
         """
         Add a TXT record using the supplied information.
 
         :param str domain: The domain to use to look up the Cloudflare zone.
-        :param str record_name: The record name (typically beginning with '_acme-challenge.').
-        :param str record_content: The record content (typically the challenge validation).
+        :param Name record_name: The record name (typically beginning with '_acme-challenge.').
+        :param Content record_content: The record content (typically the challenge validation).
         :param int record_ttl: The record TTL (number of seconds that the record may be cached).
         :raises certbot.errors.PluginError: if an error occurs communicating with the Cloudflare API
         """
@@ -123,12 +126,15 @@ class _CloudflareClient:
                 'name': record_name,
                 'content': record_content,
                 'ttl': record_ttl}
-
         try:
             logger.debug('Attempting to add record to zone %s: %s', zone_id, data)
-            self.cf.dns.records.create(zone_id=zone_id, **data)  # zones | pylint: disable=no-member
+            self.cf.dns.records.create(zone_id=zone_id,
+                                    type='TXT',
+                                    name=record_name,
+                                    content=record_content,
+                                    ttl=record_ttl)  # zones | pylint: disable=no-member
         except cloudflare.APIStatusError as e:
-            code = int(e.errors[0].code)
+            code = e.errors[0].code
             hint = None
 
             if code == 1009:
@@ -141,7 +147,7 @@ class _CloudflareClient:
         record_id = self._find_txt_record_id(zone_id, record_name, record_content)
         logger.debug('Successfully added TXT record with record_id: %s', record_id)
 
-    def del_txt_record(self, domain: str, record_name: str, record_content: str) -> None:
+    def del_txt_record(self, domain: str, record_name: record_list_params.Name, record_content: record_list_params.Content) -> None:
         """
         Delete a TXT record using the supplied information.
 
@@ -186,18 +192,15 @@ class _CloudflareClient:
         """
 
         zone_name_guesses = dns_common.base_domain_name_guesses(domain)
-        zones: list[dict[str, Any]] = []
+        zones: SyncV4PagePaginationArray[Zone] | None = None
         code = msg = None
 
         for zone_name in zone_name_guesses:
-            params = {'name': zone_name,
-                      'per_page': 1}
-
             try:
-                zones = self.cf.zones.list(**params)  # zones | pylint: disable=no-member
+                zones = self.cf.zones.list(name=zone_name, per_page=1)  # zones | pylint: disable=no-member
             except cloudflare.APIStatusError as e:
-                code = int(e.errors[0].code)
-                msg = str(e)
+                code = e.errors[0].code
+                msg = e.errors[0].message
                 hint = None
 
                 if code == 6003:
@@ -240,8 +243,8 @@ class _CloudflareClient:
                                      'supplied Cloudflare account.'
                                      .format(domain, zone_name_guesses))
 
-    def _find_txt_record_id(self, zone_id: str, record_name: str,
-                            record_content: str) -> Optional[str]:
+    def _find_txt_record_id(self, zone_id: str, record_name: record_list_params.Name,
+                            record_content: record_list_params.Content) -> Optional[str]:
         """
         Find the record_id for a TXT record with the given name and content.
 
@@ -252,16 +255,16 @@ class _CloudflareClient:
         :rtype: str
         """
 
-        params = {'type': 'TXT',
-                  'name': record_name,
-                  'content': record_content,
-                  'per_page': 1}
         try:
             # zones | pylint: disable=no-member
-            records = self.cf.dns.records.list(zone_id=zone_id, **params)
-        except cloudflare.exceptions.APISatusError as e:
+            records = self.cf.dns.records.list(zone_id=zone_id,
+                                               type='TXT',
+                                               name=record_name,
+                                               content=record_content,
+                                               per_page=1)
+        except cloudflare.APIStatusError as e:
             logger.debug('Encountered CloudFlareAPIError getting TXT record_id: %s', e)
-            records = []
+            records = None
 
         if records:
             # Cleanup is returning the system to the state we found it. If, for some reason,
