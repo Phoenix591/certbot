@@ -5,7 +5,7 @@ from typing import Callable
 from typing import Optional
 from typing import cast
 
-import CloudFlare
+from cloudflare import Cloudflare
 
 from certbot import errors
 from certbot.plugins import dns_common
@@ -98,12 +98,12 @@ class _CloudflareClient:
             # We can't use named arguments in this case, as it would break compatibility with
             # the Cloudflare library since version 2.10.1, as the `token` argument was used for
             # tokens and keys alike and the `key` argument did not exist in earlier versions.
-            self.cf = CloudFlare.CloudFlare(email, api_key)
+            self.cf = Cloudflare(api_email=api_email, api_key=api_key)
         else:
             # If no email was specified, we're using just a token. Let's use the named argument
             # for simplicity, which is compatible with all (current) versions of the Cloudflare
             # library.
-            self.cf = CloudFlare.CloudFlare(token=api_token)
+            self.cf = Cloudflare(api_token=api_token)
 
     def add_txt_record(self, domain: str, record_name: str, record_content: str,
                        record_ttl: int) -> None:
