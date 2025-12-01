@@ -194,21 +194,19 @@ class _CloudflareClient:
                       'per_page': 1}
 
             try:
-                zones = self.cf.zones.get(params=params)  # zones | pylint: disable=no-member
-            except CloudFlare.exceptions.CloudFlareAPIError as e:
+                zones = self.cf.zones.list(name=zone_name, per_page=1)  # zones | pylint: disable=no-member
+            except cloudflare.APIStatusError as e:
                 code = int(e)
                 msg = str(e)
                 hint = None
 
-                if code == 6003:
+                if code == 400:
                     hint = ('Did you copy your entire API token/key? To use Cloudflare tokens, '
                             'you\'ll need the python package cloudflare>=2.3.1.{}'
                     .format(' This certbot is running cloudflare ' + str(CloudFlare.__version__)
                     if hasattr(CloudFlare, '__version__') else ''))
-                elif code == 9103:
-                    hint = 'Did you enter the correct email address and Global key?'
-                elif code == 9109:
-                    hint = 'Did you enter a valid Cloudflare Token?'
+                elif code == 401:
+                    hint = 'Authentication error: Please double check your token or email and API key'
 
                 if hint:
                     raise errors.PluginError('Error determining zone_id: {0} {1}. Please confirm '
@@ -219,7 +217,7 @@ class _CloudflareClient:
                                  'Continuing with next zone guess...', e, e)
 
             if zones:
-                zone_id: str = zones[0]['id']
+                zone_id: str = zones.result[0].id
                 logger.debug('Found zone_id of %s for %s using name %s', zone_id, domain, zone_name)
                 return zone_id
 
