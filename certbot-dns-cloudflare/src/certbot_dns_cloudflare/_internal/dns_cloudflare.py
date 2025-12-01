@@ -166,9 +166,9 @@ class _CloudflareClient:
             if record_id:
                 try:
                     # zones | pylint: disable=no-member
-                    self.cf.zones.dns_records.delete(zone_id, record_id)
+                    self.cf.dns.records.delete(zone_id=zone_id, record_id=record_id)
                     logger.debug('Successfully deleted TXT record.')
-                except CloudFlare.exceptions.CloudFlareAPIError as e:
+                except cloudflare.APIStatusError as e:
                     logger.warning('Encountered CloudFlareAPIError deleting TXT record: %s', e)
             else:
                 logger.debug('TXT record not found; no cleanup needed.')
