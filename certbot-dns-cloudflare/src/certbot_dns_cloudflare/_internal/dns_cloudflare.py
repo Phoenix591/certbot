@@ -126,12 +126,12 @@ class _CloudflareClient:
 
         try:
             logger.debug('Attempting to add record to zone %s: %s', zone_id, data)
-            self.cf.zones.dns_records.post(zone_id, data=data)  # zones | pylint: disable=no-member
-        except CloudFlare.exceptions.CloudFlareAPIError as e:
+            self.cf.dns.records.create(zone_id, **data)  # zones | pylint: disable=no-member
+        except cloudflare.APIStatusError as e:
             code = int(e)
             hint = None
 
-            if code == 1009:
+            if code == 403:
                 hint = 'Does your API token have "Zone:DNS:Edit" permissions?'
 
             logger.error('Encountered CloudFlareAPIError adding TXT record: %d %s', e, e)
