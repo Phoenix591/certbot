@@ -256,7 +256,7 @@ class _CloudflareClient:
                   'per_page': 1}
         try:
             # zones | pylint: disable=no-member
-            records = self.cf.zones.dns_records.get(zone_id, params=params)
+            records = self.cf.dns.records.list(zone_id=zone_id, **params)
         except CloudFlare.exceptions.CloudFlareAPIError as e:
             logger.debug('Encountered CloudFlareAPIError getting TXT record_id: %s', e)
             records = []
